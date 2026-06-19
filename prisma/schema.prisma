@@ -1,0 +1,199 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      String   // "ADMIN", "DOCTOR", "PATIENT"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  doctor    Doctor?
+  patient   Patient?
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  auditLogs        AuditLog[]
+}
+
+model Clinic {
+  id        String   @id @default(uuid())
+  name      String
+  location  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  doctors   Doctor[]
+  patients  Patient[]
+  leads     Lead[]
+}
+
+model Doctor {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  specialty    String   // "IVF", "DERMATOLOGY", "DENTAL_IMPLANT", "EYE_CARE"
+  clinicId     String
+  bio          String?
+  available    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic       Clinic   @relation(fields: [clinicId], references: [id])
+  appointments Appointment[]
+}
+
+model Patient {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  clinicId       String
+  medicalHistory String?
+  currentStage   String   @default("Initial Consultation") // Current treatment stage name
+  progress       Int      @default(0)                      // Progress percentage (0-100)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic         Clinic        @relation(fields: [clinicId], references: [id])
+  appointments   Appointment[]
+  documents      Document[]
+  payments       Payment[]
+}
+
+model Lead {
+  id             String   @id @default(uuid())
+  name           String
+  email          String
+  phone          String
+  specialty      String   // "IVF", "DERMATOLOGY", "DENTAL_IMPLANT", "EYE_CARE"
+  status         String   @default("NEW") // "NEW", "QUALIFYING", "QUALIFIED", "UNQUALIFIED", "CONVERTED"
+  score          String   @default("MEDIUM") // "HIGH", "MEDIUM", "LOW"
+  scoreReason    String?
+  clinicId       String?
+  answers        String   // JSON string storing answers to qualification questions
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  clinic         Clinic?  @relation(fields: [clinicId], references: [id])
+}
+
+model Appointment {
+  id          String   @id @default(uuid())
+  patientId   String
+  doctorId    String
+  dateTime    DateTime
+  status      String   @default("PENDING") // "PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"
+  type        String   // "CONSULTATION", "PROCEDURE", "FOLLOW_UP"
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+}
+
+model Treatment {
+  id          String   @id @default(uuid())
+  name        String
+  specialty   String   // "IVF", "DERMATOLOGY", "DENTAL_IMPLANT", "EYE_CARE"
+  description String
+  cost        Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  stages      TreatmentStage[]
+}
+
+model TreatmentStage {
+  id          String   @id @default(uuid())
+  treatmentId String
+  name        String
+  order       Int
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  treatment   Treatment @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  patientId String
+  name      String
+  url       String
+  type      String   // "REPORT", "IMAGE", "PRESCRIPTION", "CONSENT"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  patientId   String
+  amount      Float
+  status      String   @default("PENDING") // "PENDING", "PAID", "OVERDUE"
+  plan        String   // "FULL", "INSTALLMENT_12", "INSTALLMENT_24", "INSTALLMENT_36"
+  dueDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  isAI       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model AutomationRule {
+  id           String   @id @default(uuid())
+  triggerEvent String   // "NEW_LEAD", "LEAD_QUALIFIED", "APPOINTMENT_BOOKED"
+  actionType   String   // "SEND_SMS", "SEND_EMAIL", "UPDATE_SCORE"
+  template     String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Analytics {
+  id        String   @id @default(uuid())
+  metric    String   // "NEW_LEADS", "CONSULTATIONS", "TREATMENTS_STARTED", "REVENUE"
+  value     Float
+  date      DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  details   String
+  timestamp DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
